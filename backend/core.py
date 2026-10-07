@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import math
+import os
 import random
 import sqlite3
 from collections import defaultdict
@@ -13,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo('Asia/Dhaka')
 START = datetime(2026, 10, 7, 11, 0, tzinfo=TZ)
-DB = Path(__file__).resolve().parent / 'flowcast.sqlite3'
+DB = Path(os.environ.get('FLOWCAST_DB_PATH') or Path(__file__).resolve().parent / 'flowcast.sqlite3').expanduser()
 STALE_MINUTES = 120
 AREAS = [('Dhanmondi', 23.7465, 90.3760), ('Kalabagan', 23.7493, 90.3861), ('Panthapath', 23.7516, 90.3933), ('New Market', 23.7339, 90.3841), ('Mohammadpur', 23.7625, 90.3586), ('Shahbag', 23.7388, 90.3956)]
 NAMES = ['Lake View Store', 'Satmasjid Telecom', 'Road 7 Traders', 'City Corner', 'Green Point', 'Azimpur Mart', 'Rafiq Digital', 'Bengal Variety', 'Metro Stationery', 'Shapla Store', 'Lalmatia Hub', 'Baitul Shop', 'Campus Corner', 'Nilkhet Books', 'Central Telecom', 'Garden Mart', 'Bridge Bazaar', 'Sunrise Store']
@@ -40,7 +41,9 @@ def apply_transaction(cash, emoney, kind, amount):
     return cash + dc, emoney + de
 
 
-def connect(path=DB):
+def connect(path=None):
+    path = Path(path) if path is not None else DB
+    path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
     db.row_factory = sqlite3.Row
     db.execute('PRAGMA foreign_keys=ON')

@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import core
 
 engine: core.ForecastEngine | None = None
+DIST_DIR = Path(__file__).resolve().parent.parent / 'dist'
+DEV_ORIGINS = 'http://localhost:5173,http://127.0.0.1:5173'
+cors_origins = [origin.strip() for origin in os.environ.get('FLOWCAST_CORS_ORIGINS', DEV_ORIGINS).split(',') if origin.strip()]
 
 
 @asynccontextmanager
@@ -23,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title='UPAY FLOWCAST API', version='1.0.0', lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=['http://localhost:5173', 'http://127.0.0.1:5173'], allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=['*'], allow_headers=['*'])
 
 
 def run(fn):
@@ -174,3 +179,29 @@ async def import_commit(file: UploadFile = File(...)):
     result = run(lambda db: core.import_csv(db, content))
     with core.connect() as db: engine = core.ForecastEngine(db)
     return result
+
+
+# Production build: API and frontend share one origin. Static files are mounted
+# after API registration; unknown API paths must remain JSON 404 responses.
+app.mount('/assets', StaticFiles(directory=DIST_DIR / 'assets', check_dir=False), name='assets')
+
+
+@app.get('/favicon.svg', include_in_schema=False)
+def favicon():
+    icon = DIST_DIR / 'favicon.svg'
+    if not icon.is_file():
+        raise HTTPException(status_code=404, detail='Favicon not built')
+    return FileResponse(icon, media_type='image/svg+xml')
+
+
+@app.get('/', include_in_schema=False)
+@app.get('/{path:path}', include_in_schema=False)
+def frontend(path: str = ''):
+    if path == 'api' or path.startswith(('api/', 'assets/')) or path in ('docs', 'redoc', 'openapi.json'):
+        raise HTTPException(status_code=404, detail='Not found')
+    if '.' in Path(path).name:
+        raise HTTPException(status_code=404, detail='Asset not found')
+    index = DIST_DIR / 'index.html'
+    if not index.is_file():
+        raise HTTPException(status_code=503, detail='Frontend not built. Run npm run build.')
+    return FileResponse(index, media_type='text/html')
