@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / 'artifacts' / 'upay-flowcast-source.zip'
 ROOT_FILES = {
     '.gitignore', '.dockerignore', '.env.example', 'Dockerfile', 'README.md',
-    'index.html', 'package.json', 'package-lock.json', 'requirements.txt',
+    'index.html', 'package.json', 'package-lock.json', 'render.yaml', 'requirements.txt',
     'tsconfig.json', 'vite.config.ts',
 }
 SOURCE_DIRS = {'src', 'public', 'backend', 'tests', 'docs', 'submission', 'scripts'}

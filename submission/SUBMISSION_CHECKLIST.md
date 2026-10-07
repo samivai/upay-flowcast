@@ -6,11 +6,12 @@ This is an operational checklist, not a claim of eligibility. The [official hack
 - [x] Local Git repository initialized with an honest current-date snapshot and stepwise preparation commits. Earlier continuous history remains **unverified**.
 - [x] README covers overview, implemented features, AI, stack, tested prerequisites, install, variables, run/build, testing, and current deployment status.
 - [x] Single-origin FastAPI serving, configurable database path, `.env.example`, Dockerfile, and `.dockerignore` prepared.
+- [x] Render Blueprint and paid persistent-disk deployment steps prepared; no paid service created.
 - [x] Project report draft, video script, storyboard, architecture, AI approach, resource disclosure, compliance map, and on-site update template prepared.
 - [x] Deterministic packaging script prepared and checked for excluded local files.
 - [ ] Confirm team name, members, registration IDs, challenge/theme, development start time, and eligibility of this pre-existing project.
 - [x] Dedicated [public GitHub repository](https://github.com/samivai/upay-flowcast) created; actual local commits pushed to `main` and file visibility verified. Earlier continuous history remains unverified.
-- [ ] Provide a persistent hosting destination, deploy the current source, test the public HTTPS URL and persistence, then add that verified URL to README/report.
+- [ ] Review Render billing, create the paid disk-backed service from `render.yaml` or the manual settings, test the public HTTPS URL and restart persistence, then add that verified URL to README/report. See `docs/RENDER_DEPLOYMENT.md`.
 - [ ] Record and upload an actual demo video showing the app, AI evaluation, and practical impact; add its verified URL.
 - [ ] Export the report to the organizer-required format, add real team/repository/deployment/video details, and review all claims.
 - [ ] Confirm any required prototype file, presentation, video duration, report page count, and submission channel with organizers. None has been invented here.

@@ -4,6 +4,7 @@
 **Members / registration IDs:** [CONFIRM WITH TEAM]  
 **Public GitHub repository:** [samivai/upay-flowcast](https://github.com/samivai/upay-flowcast) — published and verified; its current history begins with the workspace snapshot below.  
 **Live deployment:** **Not deployed yet** — a verified public HTTPS URL is required.  
+**Render deployment:** [Step-by-step guide](docs/RENDER_DEPLOYMENT.md) and [Blueprint](render.yaml). Persistent SQLite storage requires a **paid** Render web service and disk; current estimate is **US$7.25/month** for the specified plan and 1 GB disk before usage overages/taxes. Review Render's current billing summary before creation.<br>
 **Demo video:** **Not recorded yet** — [script](submission/VIDEO_SCRIPT.md) and [storyboard](submission/VIDEO_STORYBOARD.md) are prepared.  
 **Project report:** [Editable draft](submission/PROJECT_REPORT.md); export format: **Confirm with organizers**.
 
@@ -100,7 +101,7 @@ mkdir -p data
 docker run --rm -p 8000:8000 -v "$(pwd)/data:/data" upay-flowcast
 ```
 
-The image builds Vite output and serves it from FastAPI; its database path is `/data/flowcast.sqlite3`. Mount `/data` to persistent storage on the chosen host. Docker configuration is prepared but was **not image-build tested** here because Docker was unavailable. Deployment destination and credentials were not configured; no live URL is claimed.
+The image builds Vite output and serves it from FastAPI; its database path is `/data/flowcast.sqlite3`. Mount `/data` to persistent storage on the chosen host. The [Render deployment guide](docs/RENDER_DEPLOYMENT.md) explains the checked-in `render.yaml`, paid plan and disk costs, environment variables, and verification. Docker configuration is prepared but was **not image-build tested** here because Docker was unavailable. No live Render URL is claimed.
 
 ## Test and verify
 

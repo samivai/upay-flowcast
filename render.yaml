@@ -1,0 +1,20 @@
+# UPAY FLOWCAST uses one Docker web service and one persistent SQLite disk.
+# This is a PAID Render deployment: 0.5c-512mb plus 1 GB of disk storage.
+services:
+  - type: web
+    name: upay-flowcast
+    runtime: docker
+    branch: main
+    plan: 0.5c-512mb
+    numInstances: 1
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: FLOWCAST_DB_PATH
+        value: /data/flowcast.sqlite3
+      - key: PORT
+        value: "8000"
+    disk:
+      name: flowcast-data
+      mountPath: /data
+      sizeGB: 1
