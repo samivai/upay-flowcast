@@ -111,7 +111,7 @@ npm run typecheck
 npm run build
 ```
 
-Manual flow: open A01 (Lake View Store), inspect its High cash warning, compare closer excluded A03 with suitable A04, request cash, switch to Supervisor → Operations, accept and complete, then inspect A01's updated Low risk and the Demo walkthrough replay. Test the language switch, balance confirmation, CSV preview, and reset. Check Dashboard, Rebalance, Operations, Import, and Demo at roughly 360px, 768px, and 1440px for overflow, chart readability, touch targets, keyboard focus, and table scrolling. Browser automation was unavailable during submission preparation, so these visual checks remain manual.
+Manual flow: open A01 (Lake View Store), inspect its High cash warning, compare closer excluded A03 with suitable A04, request cash, switch to Supervisor → Operations, accept and complete, then inspect the updated risk and Demo walkthrough replay. On 7 October 2026, headless Chrome checks covered 360px, 390px, 768px, 1024px, and 1440px page overflow; Agent/Supervisor screenshots; risk filtering; request creation, acceptance, and completion; balance confirmation; Bangla navigation; CSV preview/import; and reset using a separate fictional review database. Screenshots are saved locally under `artifacts/ui-review/`. Keyboard, screen-reader, and real touch-device checks remain manual.
 
 ## Demo settings and operational limits
 

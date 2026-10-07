@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
   ArrowLeftRight,
   BarChart3,
   Bell,
+  CalendarDays,
   CheckCircle2,
   ChevronRight,
   CircleHelp,
@@ -12,6 +13,7 @@ import {
   Download,
   LayoutDashboard,
   Menu,
+  MoreHorizontal,
   RefreshCcw,
   Search,
   ShieldCheck,
@@ -25,6 +27,7 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
+  LabelList,
   Line,
   LineChart,
   ReferenceLine,
@@ -44,6 +47,8 @@ type Agent = {
   emoney_reserve: number;
   confirmed_at: string;
   available: number;
+  open_hour: number;
+  close_hour: number;
   is_distributor: number;
 };
 type Bucket = {
@@ -181,7 +186,14 @@ const post = <T,>(path: string, body?: unknown) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {}),
   });
-const taka = (n: number) => "৳" + Math.round(n / 100).toLocaleString("en-BD");
+const taka = (n: number) =>
+  `${n < 0 ? "-" : ""}৳${Math.round(Math.abs(n) / 100).toLocaleString("en-BD")}`;
+const takaAxis = (n: number) =>
+  `${n < 0 ? "-" : ""}৳` +
+  new Intl.NumberFormat("en-BD", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(Math.abs(n));
 const time = (v: string | null) =>
   v
     ? new Intl.DateTimeFormat("en-BD", {
@@ -235,6 +247,29 @@ const labels = {
     reset: "Reset demo",
     simulation: "Simulated data",
     prototype: "Hackathon prototype",
+    balanceCurrent: "Balance current",
+    staleCount: "stale",
+    additionalRequired: "Additional required",
+    forecastRequests: "Forecast requests",
+    reserveWatch: "Reserve watch",
+    safeSources: "Safe sources",
+    recentActivity: "Recent activity",
+    suitableSources: "Suitable sources",
+    requestSummary: "Request summary",
+    openAgents: "Open agents",
+    highRisk: "High risk",
+    cashBreaches: "Cash breaches",
+    emoneyBreaches: "E-money breaches",
+    pendingRequests: "Pending requests",
+    staleBalances: "Stale balances",
+    riskOverview: "Risk overview",
+    filterByRisk: "Filter by risk",
+    selectedAgent: "Selected agent",
+    currentBalanceLabel: "Current balance",
+    projectedBalance: "Projected balance",
+    forecastHour: "Next six hours",
+    peak: "Peak",
+    more: "More",
   },
   bn: {
     dashboard: "ড্যাশবোর্ড",
@@ -268,6 +303,29 @@ const labels = {
     reset: "ডেমো রিসেট",
     simulation: "সিমুলেটেড তথ্য",
     prototype: "হ্যাকাথন প্রোটোটাইপ",
+    balanceCurrent: "ব্যালেন্স হালনাগাদ",
+    staleCount: "পুরোনো",
+    additionalRequired: "অতিরিক্ত প্রয়োজন",
+    forecastRequests: "সম্ভাব্য লেনদেন",
+    reserveWatch: "সংরক্ষণ নজরদারি",
+    safeSources: "নিরাপদ উৎস",
+    recentActivity: "সাম্প্রতিক কার্যক্রম",
+    suitableSources: "উপযুক্ত উৎস",
+    requestSummary: "অনুরোধের সারাংশ",
+    openAgents: "খোলা এজেন্ট",
+    highRisk: "উচ্চ ঝুঁকি",
+    cashBreaches: "নগদ সংরক্ষণ ঘাটতি",
+    emoneyBreaches: "ই-মানি সংরক্ষণ ঘাটতি",
+    pendingRequests: "অপেক্ষমাণ অনুরোধ",
+    staleBalances: "পুরোনো ব্যালেন্স",
+    riskOverview: "ঝুঁকির সারাংশ",
+    filterByRisk: "ঝুঁকি দিয়ে বাছাই",
+    selectedAgent: "নির্বাচিত এজেন্ট",
+    currentBalanceLabel: "বর্তমান ব্যালেন্স",
+    projectedBalance: "সম্ভাব্য ব্যালেন্স",
+    forecastHour: "পরবর্তী ছয় ঘণ্টা",
+    peak: "সর্বোচ্চ",
+    more: "আরও",
   },
 };
 const agentNav: Page[] = [
@@ -297,16 +355,26 @@ const icons: Record<Page, typeof LayoutDashboard> = {
   import: Upload,
   demo: CircleHelp,
 };
+const riskBn: Record<string, string> = {
+  "All risks": "সব ঝুঁকি",
+  High: "উচ্চ",
+  Medium: "মাঝারি",
+  Low: "কম",
+  "Needs confirmation": "নিশ্চিত করুন",
+};
+const riskLabel = (risk: string, lang: "en" | "bn") =>
+  lang === "bn" ? riskBn[risk] || risk : risk;
 function Badge({ risk, lang = "en" }: { risk: string; lang?: "en" | "bn" }) {
-  const bn: Record<string, string> = {
-    High: "উচ্চ",
-    Medium: "মাঝারি",
-    Low: "কম",
-    "Needs confirmation": "নিশ্চিত করুন",
-  };
   return (
     <span className={"badge " + risk.toLowerCase().replaceAll(" ", "-")}>
-      {lang === "bn" ? bn[risk] || risk : risk}
+      {risk === "High" ? (
+        <AlertTriangle size={13} />
+      ) : risk === "Low" ? (
+        <CheckCircle2 size={13} />
+      ) : (
+        <Clock3 size={13} />
+      )}
+      {riskLabel(risk, lang)}
     </span>
   );
 }
@@ -345,7 +413,15 @@ export default function App() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
+  const [replayBusy, setReplayBusy] = useState(false);
+  const [replayAfterCompletion, setReplayAfterCompletion] = useState(false);
+  const [scenarioVersion, setScenarioVersion] = useState(0);
+  const [visitedPages, setVisitedPages] = useState<Set<Page>>(
+    new Set(["dashboard"]),
+  );
   const [menu, setMenu] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMenuRef = useRef<HTMLButtonElement>(null);
   const [chartKind, setChartKind] = useState<"cash" | "emoney">("cash");
   const [amount, setAmount] = useState("");
   const [cashInput, setCashInput] = useState("");
@@ -353,8 +429,15 @@ export default function App() {
   const [reason, setReason] = useState("");
   const [areaFilter, setAreaFilter] = useState("All areas");
   const [riskFilter, setRiskFilter] = useState("All risks");
+  const [sortBy, setSortBy] = useState<"risk" | "breach" | "required">("risk");
+  const [alertFilter, setAlertFilter] = useState<"all" | "cash" | "emoney">(
+    "all",
+  );
+  const [alertRiskFilter, setAlertRiskFilter] = useState("All risks");
+  const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [search, setSearch] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [csvPreview, setCsvPreview] = useState<{
     valid_count: number;
     errors: { row: number; message: string }[];
@@ -387,7 +470,24 @@ export default function App() {
       setHistory(h);
       setCashInput(String(Math.round(f.agent.cash / 100)));
       setEmoneyInput(String(Math.round(f.agent.emoney / 100)));
-      if (r.required) setAmount((r.required / 100).toFixed(2));
+      const firstSource = r.candidates.find((candidate) => candidate.suitable);
+      const uncovered = Math.max(
+        0,
+        r.required -
+          q
+            .filter(
+              (request) =>
+                request.recipient_id === aid &&
+                ["Pending", "Accepted"].includes(request.status),
+            )
+            .reduce((total, request) => total + request.amount, 0),
+      );
+      setSelectedCandidateId(firstSource?.id || "");
+      setAmount(
+        (Math.min(uncovered, firstSource?.safe_available || 0) / 100).toFixed(
+          2,
+        ),
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -416,22 +516,48 @@ export default function App() {
     }
   };
   const go = (p: Page) => {
+    if (menu) menuButtonRef.current?.focus();
     setPage(p);
+    setVisitedPages((current) => new Set(current).add(p));
     setMenu(false);
     setError("");
     setSuccess("");
+    window.scrollTo({
+      top: 0,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
   };
   const changeRole = (r: "agent" | "supervisor") => {
     setRole(r);
     go(r === "agent" ? "dashboard" : "overview");
   };
+  useEffect(() => {
+    if (!menu) return;
+    closeMenuRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenu(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menu]);
   const reset = () => {
     if (
       window.confirm(
         "Reset UPAY FLOWCAST demo? This removes all requests, corrections, and imports.",
       )
-    )
-      mutate(() => post("/reset"), "Demo restored to the fixed scenario.");
+    ) {
+      setReplayAfterCompletion(false);
+      setReplay(null);
+      void mutate(
+        () => post("/reset"),
+        "Demo restored to the fixed scenario.",
+      ).then(() => setScenarioVersion((version) => version + 1));
+    }
   };
   const chooseAgent = (id: string) => {
     setAid(id);
@@ -448,17 +574,11 @@ export default function App() {
       ) || [],
     [summary, areaFilter, riskFilter, search],
   );
-  const candidateList = useMemo(() => {
-    if (!rec) return [];
-    const safe = rec.candidates.filter((c) => c.suitable),
-      excluded = rec.candidates.filter((c) => !c.suitable);
-    return [
-      ...safe.slice(0, 2),
-      ...excluded.slice(0, 2),
-      ...safe.slice(2),
-      ...excluded.slice(2),
-    ];
-  }, [rec]);
+  const safeCandidates = rec?.candidates.filter((c) => c.suitable) || [];
+  const excludedCandidates = rec?.candidates.filter((c) => !c.suitable) || [];
+  const selectedCandidate =
+    safeCandidates.find((c) => c.id === selectedCandidateId) ||
+    safeCandidates[0];
   const areas = useMemo(
     () => ["All areas", ...new Set(agents.map((a) => a.area))],
     [agents],
@@ -466,8 +586,11 @@ export default function App() {
   const chartData =
     forecast?.buckets.map((b) => ({
       time: time(b.time),
+      fullTime: dateTime(b.time),
       cash: Math.round(b.cash / 100),
       emoney: Math.round(b.emoney / 100),
+      cashReserve: Math.round(forecast.agent.cash_reserve / 100),
+      emoneyReserve: Math.round(forecast.agent.emoney_reserve / 100),
       count: b.demand_count,
       cashIn: Math.round(b.cash_in / 100),
       cashOut: Math.round(b.cash_out / 100),
@@ -486,25 +609,136 @@ export default function App() {
         )
         .reduce((n, r) => n + r.amount, 0),
   );
+  const requestLimit = Math.min(
+    selectedCandidate?.safe_available || 0,
+    outstanding,
+  );
+  const scenarioHour = forecast
+    ? Number(
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Asia/Dhaka",
+          hour: "2-digit",
+          hourCycle: "h23",
+        }).format(new Date(forecast.clock)),
+      )
+    : 0;
+  const isOpen =
+    !!forecast?.agent.available &&
+    scenarioHour >= (forecast?.agent.open_hour ?? 0) &&
+    scenarioHour < (forecast?.agent.close_hour ?? 24);
+  const activeAlertCount =
+    role === "agent"
+      ? Number(!!forecast?.breach_cash) +
+        Number(!!forecast?.breach_emoney) +
+        Number(!!forecast?.stale)
+      : (summary?.cash_breaches || 0) +
+        (summary?.emoney_breaches || 0) +
+        (summary?.stale || 0);
+  const peakBucket = forecast?.buckets.reduce(
+    (best, bucket) => (bucket.demand_count > best.demand_count ? bucket : best),
+    forecast.buckets[0],
+  );
+  const riskOrder: Record<string, number> = {
+    High: 0,
+    "Needs confirmation": 1,
+    Medium: 2,
+    Low: 3,
+  };
+  const sortedAgents = [...filtered].sort((a, b) =>
+    sortBy === "breach"
+      ? (a.earliest_breach || "9999").localeCompare(b.earliest_breach || "9999")
+      : sortBy === "required"
+        ? (b.kind ? b.required[b.kind] : 0) - (a.kind ? a.required[a.kind] : 0)
+        : (riskOrder[a.risk] ?? 4) - (riskOrder[b.risk] ?? 4),
+  );
   const refreshReplay = async () => {
+    setReplayBusy(true);
     try {
-      setReplay(
-        await post<Replay>("/replay", {
-          agent_id: aid,
-          amount: rec?.required || 0,
-          kind: rec?.kind || "cash",
-        }),
-      );
+      const result = await post<Replay>("/replay", {
+        agent_id: aid,
+        amount: rec?.required || 0,
+        kind: rec?.kind || "cash",
+      });
+      setReplay(result);
+      if (
+        aid === "A01" &&
+        requests.some(
+          (r) => r.recipient_id === "A01" && r.status === "Completed",
+        )
+      )
+        setReplayAfterCompletion(true);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setReplayBusy(false);
     }
   };
   useEffect(() => {
     if (page === "demo" && forecast) refreshReplay();
-  }, [page, aid, forecast?.clock]);
+  }, [page, aid, forecast?.clock, scenarioVersion]);
+  const demoHasRequest = requests.some((r) => r.recipient_id === "A01");
+  const demoHasAccepted = requests.some(
+    (r) =>
+      r.recipient_id === "A01" && ["Accepted", "Completed"].includes(r.status),
+  );
+  const demoHasCompleted = requests.some(
+    (r) => r.recipient_id === "A01" && r.status === "Completed",
+  );
+  const demoSteps = [
+    {
+      label: "Inspect A01's cash forecast and reserve warning",
+      done: aid === "A01" && visitedPages.has("dashboard"),
+      action: () => {
+        setAid("A01");
+        changeRole("agent");
+      },
+    },
+    {
+      label: "Compare suitable and excluded sources",
+      done: visitedPages.has("rebalance"),
+      action: () => {
+        setAid("A01");
+        changeRole("agent");
+        go("rebalance");
+      },
+    },
+    {
+      label: "Create a simulated exchange request",
+      done: demoHasRequest,
+      action: () => {
+        changeRole("agent");
+        go("rebalance");
+      },
+    },
+    {
+      label: "Accept the request as supervisor",
+      done: demoHasAccepted,
+      action: () => {
+        changeRole("supervisor");
+        go("operations");
+      },
+    },
+    {
+      label: "Complete the exchange and review recorded balances",
+      done: demoHasCompleted,
+      action: () => {
+        changeRole("supervisor");
+        go("operations");
+      },
+    },
+    {
+      label: "Compare the same-demand service replay",
+      done: replayAfterCompletion && demoHasCompleted,
+      action: () => (page === "demo" ? refreshReplay() : go("demo")),
+    },
+  ];
+  const currentDemoStep = demoSteps.findIndex((step) => !step.done);
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
       <aside
         className={"sidebar " + (menu ? "open" : "")}
         aria-label="Main navigation"
@@ -514,16 +748,29 @@ export default function App() {
             <strong>UPAY FLOWCAST</strong>
             <small>AI Agent Liquidity Forecasting</small>
           </div>
+          <button
+            ref={closeMenuRef}
+            className="drawer-close"
+            aria-label="Close navigation"
+            onClick={() => {
+              setMenu(false);
+              menuButtonRef.current?.focus();
+            }}
+          >
+            <X size={20} />
+          </button>
         </div>
-        <div className="role-switch">
+        <div className="role-switch" aria-label="Workspace">
           <button
             className={role === "agent" ? "selected" : ""}
+            aria-pressed={role === "agent"}
             onClick={() => changeRole("agent")}
           >
             {t.agent}
           </button>
           <button
             className={role === "supervisor" ? "selected" : ""}
+            aria-pressed={role === "supervisor"}
             onClick={() => changeRole("supervisor")}
           >
             {t.supervisor}
@@ -539,6 +786,7 @@ export default function App() {
               <button
                 key={p}
                 className={"nav-item " + (page === p ? "active" : "")}
+                aria-current={page === p ? "page" : undefined}
                 onClick={() => go(p)}
               >
                 <Icon size={18} />
@@ -549,16 +797,27 @@ export default function App() {
           <div className="nav-sep" />
           <button
             className={"nav-item " + (page === "demo" ? "active" : "")}
+            aria-current={page === "demo" ? "page" : undefined}
             onClick={() => go("demo")}
           >
             <CircleHelp size={18} />
             <span>{t.demo}</span>
           </button>
         </nav>
+        <button
+          className="sidebar-language"
+          onClick={() => setLang(lang === "en" ? "bn" : "en")}
+        >
+          {lang === "en" ? "বাংলা ভাষা" : "English language"}
+        </button>
         <div className="sidebar-foot">
           <span className="live-dot" />
           {t.simulation} · {t.prototype}
-          <p>No live transfers or official integration</p>
+          <p>
+            {lang === "bn"
+              ? "বাস্তব লেনদেন বা সরকারি সংযোগ নেই"
+              : "No live transfers or official integration"}
+          </p>
         </div>
       </aside>
       {menu && (
@@ -568,11 +827,13 @@ export default function App() {
           onClick={() => setMenu(false)}
         />
       )}
-      <main className="main">
+      <main className="main" id="main-content">
         <header className="topbar">
           <button
+            ref={menuButtonRef}
             className="menu-button"
             aria-label="Open menu"
+            aria-expanded={menu}
             onClick={() => setMenu(true)}
           >
             <Menu size={23} />
@@ -580,13 +841,39 @@ export default function App() {
           <div className="top-title">
             <h1>{t[page]}</h1>
             <p>
+              <CalendarDays size={13} aria-hidden="true" />{" "}
               {forecast?.clock
-                ? `Scenario: ${dateTime(forecast.clock)} · Asia/Dhaka`
+                ? `${role === "agent" ? forecast.agent.name : "Dhaka network"} · ${dateTime(forecast.clock)} · Asia/Dhaka`
                 : t.simulation}
             </p>
           </div>
           <div className="top-actions">
-            <span className="prototype-pill">{t.prototype}</span>
+            <span className="prototype-pill">{t.simulation}</span>
+            <span
+              className={
+                "freshness-pill " +
+                (forecast?.stale && role === "agent" ? "stale" : "")
+              }
+            >
+              <span className="freshness-dot" />
+              {role === "agent"
+                ? forecast?.stale
+                  ? t.confirm
+                  : t.balanceCurrent
+                : `${summary?.stale || 0} ${t.staleCount}`}
+            </span>
+            <button
+              className="alert-shortcut"
+              onClick={() =>
+                role === "agent"
+                  ? go("alerts")
+                  : (setRiskFilter("High"), go("overview"))
+              }
+              aria-label={`${activeAlertCount} active alerts; open ${role === "agent" ? "alerts" : "high-risk watchlist"}`}
+            >
+              <Bell size={17} />
+              <span>{activeAlertCount}</span>
+            </button>
             <button
               className="language"
               onClick={() => setLang(lang === "en" ? "bn" : "en")}
@@ -598,8 +885,9 @@ export default function App() {
               className="icon-button"
               onClick={refresh}
               aria-label="Refresh data"
+              disabled={loading}
             >
-              <RefreshCcw size={18} />
+              <RefreshCcw size={18} className={loading ? "spinning" : ""} />
             </button>
           </div>
         </header>
@@ -608,6 +896,11 @@ export default function App() {
             <div className="notice error" role="alert">
               <AlertTriangle size={18} />
               {error}
+              {!forecast && (
+                <button className="text-link" onClick={refresh}>
+                  Retry
+                </button>
+              )}
               <button onClick={() => setError("")} aria-label="Dismiss">
                 <X size={17} />
               </button>
@@ -623,27 +916,61 @@ export default function App() {
             </div>
           )}
           {loading && !forecast ? (
-            <div className="loading">Loading scenario and forecasts…</div>
+            <div
+              className="skeleton-grid"
+              aria-label="Loading scenario and forecasts"
+              aria-busy="true"
+            >
+              <div className="skeleton-line wide" />
+              <div className="skeleton-row">
+                <div />
+                <div />
+                <div />
+                <div />
+              </div>
+              <div className="skeleton-panel" />
+            </div>
           ) : null}
           {forecast && (
             <>
               {(role === "agent" || page === "details" || page === "demo") && (
                 <div className="agent-strip">
                   <div>
-                    <span className="eyebrow">SELECTED AGENT</span>
+                    <span className="eyebrow">{t.selectedAgent}</span>
                     <h2>
                       {forecast.agent.name}{" "}
                       <span className="muted">{forecast.agent.id}</span>
                     </h2>
                     <p>
-                      {forecast.agent.area} · Last confirmed{" "}
+                      {forecast.agent.area} ·{" "}
+                      {isOpen
+                        ? lang === "bn"
+                          ? "এখন খোলা"
+                          : "Open now"
+                        : lang === "bn"
+                          ? "এখন বন্ধ"
+                          : "Closed now"}{" "}
+                      · {lang === "bn" ? "শেষ নিশ্চিত" : "Last confirmed"}{" "}
                       {dateTime(forecast.agent.confirmed_at)}
+                    </p>
+                    <p className="strip-recommendation">
+                      {forecast.stale
+                        ? lang === "bn"
+                          ? "পদক্ষেপের আগে গণনা করা ব্যালেন্স নিশ্চিত করুন।"
+                          : "Confirm the counted balance before acting."
+                        : forecast.kind
+                          ? lang === "bn"
+                            ? `${time(forecast.earliest_breach)}-এর আগে ${taka(forecast.required[forecast.kind])} ${forecast.kind === "cash" ? t.cash : t.emoney} প্রস্তুত করুন।`
+                            : `Prepare ${taka(forecast.required[forecast.kind])} ${forecast.kind === "cash" ? t.cash : t.emoney} before ${time(forecast.earliest_breach)}.`
+                          : lang === "bn"
+                            ? "পরবর্তী ছয় ঘণ্টায় উভয় ব্যালেন্স সংরক্ষণের ওপরে থাকবে।"
+                            : "Both balances stay above reserve for six forecast hours."}
                     </p>
                   </div>
                   <div className="strip-actions">
                     <Badge risk={forecast.risk} lang={lang} />
                     <label className="select-label">
-                      Agent
+                      {lang === "bn" ? "এজেন্ট" : "Agent"}
                       <select
                         value={aid}
                         onChange={(e) => chooseAgent(e.target.value)}
@@ -660,13 +987,14 @@ export default function App() {
               )}
               {page === "dashboard" && (
                 <>
-                  <div className="balance-grid">
+                  <div className="balance-grid dashboard-metrics">
                     <BalanceCard
                       icon={Wallet}
                       title={t.cash}
                       value={forecast.agent.cash}
                       reserve={forecast.agent.cash_reserve}
                       tone="blue"
+                      reserveLabel={t.reserve}
                     />
                     <BalanceCard
                       icon={ArrowLeftRight}
@@ -674,55 +1002,62 @@ export default function App() {
                       value={forecast.agent.emoney}
                       reserve={forecast.agent.emoney_reserve}
                       tone="yellow"
+                      reserveLabel={t.reserve}
                     />
-                    <div
-                      className={
-                        "card risk-card " +
-                        (forecast.risk === "High" ? "risk-high" : "")
+                    <InfoCard
+                      icon={AlertTriangle}
+                      title={t.additionalRequired}
+                      value={taka(
+                        forecast.kind ? forecast.required[forecast.kind] : 0,
+                      )}
+                      detail={
+                        forecast.kind
+                          ? `${forecast.kind === "cash" ? t.cash : t.emoney} · ${lang === "bn" ? "সম্ভাব্য সর্বনিম্ন ব্যালেন্স সংরক্ষণের ওপরে রাখতে" : "to keep the projected minimum above reserve"}`
+                          : lang === "bn"
+                            ? "এই ছয় ঘণ্টায় অতিরিক্ত ব্যালেন্স লাগবে না"
+                            : "No additional balance needed in this horizon"
                       }
-                    >
-                      <span className="eyebrow">{t.warning}</span>
-                      <div className="risk-head">
-                        <Badge risk={forecast.risk} lang={lang} />
-                        <Clock3 size={21} />
-                      </div>
-                      <h3>
-                        {forecast.earliest_breach
-                          ? `${forecast.kind === "cash" ? t.cash : t.emoney} · ${time(forecast.earliest_breach)}`
-                          : t.allclear}
-                      </h3>
-                      <p>
-                        {lang === "en"
-                          ? forecast.explanation_en
-                          : forecast.explanation_bn}
-                      </p>
-                      <button
-                        className="text-link"
-                        onClick={() =>
-                          go(forecast.stale ? "confirm" : "rebalance")
-                        }
-                      >
-                        {forecast.stale ? t.confirm : t.options}
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
+                    />
+                    <InfoCard
+                      icon={BarChart3}
+                      title={t.forecastRequests}
+                      value={forecast.buckets
+                        .reduce((total, b) => total + b.demand_count, 0)
+                        .toLocaleString("en-BD")}
+                      detail={`${t.forecastHour} · ${t.peak} ${peakBucket?.demand_count || 0} ${time(peakBucket?.time || null)}`}
+                    />
                   </div>
-                  <div className="two-col">
-                    <div className="card chart-card">
+                  <div className="forecast-layout">
+                    <div className="card chart-card forecast-anchor">
                       <div className="card-title">
                         <div>
-                          <span className="eyebrow">PROJECTION</span>
+                          <span className="eyebrow">
+                            {lang === "bn"
+                              ? "ছয় ঘণ্টার তারল্য পূর্বাভাস"
+                              : "SIX-HOUR LIQUIDITY PROJECTION"}
+                          </span>
                           <h3>{t.forecast}</h3>
+                          <p>
+                            {t.currentBalanceLabel}{" "}
+                            {chartKind === "cash" ? t.cash : t.emoney}:{" "}
+                            {taka(forecast.agent[chartKind])} · {t.reserve}{" "}
+                            {taka(forecast.agent[`${chartKind}_reserve`])}
+                          </p>
                         </div>
-                        <div className="segmented">
+                        <div
+                          className="segmented"
+                          aria-label="Forecast balance"
+                        >
                           <button
                             className={chartKind === "cash" ? "on" : ""}
+                            aria-pressed={chartKind === "cash"}
                             onClick={() => setChartKind("cash")}
                           >
                             {t.cash}
                           </button>
                           <button
                             className={chartKind === "emoney" ? "on" : ""}
+                            aria-pressed={chartKind === "emoney"}
                             onClick={() => setChartKind("emoney")}
                           >
                             {t.emoney}
@@ -733,20 +1068,55 @@ export default function App() {
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart
                             data={chartData}
-                            margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                            margin={{ top: 12, right: 12, left: 3, bottom: 0 }}
                           >
                             <CartesianGrid vertical={false} stroke="#e8edf3" />
                             <XAxis dataKey="time" tick={{ fontSize: 11 }} />
                             <YAxis
                               tick={{ fontSize: 11 }}
-                              tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                              width={58}
+                              tickFormatter={takaAxis}
+                              domain={([dataMin, dataMax]) => {
+                                const reserve =
+                                  forecast.agent[`${chartKind}_reserve`] / 100;
+                                const low = Math.min(dataMin, reserve);
+                                const high = Math.max(dataMax, reserve);
+                                const pad = Math.max(500, (high - low) * 0.12);
+                                return [low - pad, high + pad];
+                              }}
                             />
                             <Tooltip
-                              formatter={(v) =>
-                                `৳${Number(v).toLocaleString("en-BD")}`
-                              }
+                              content={({ active, payload }) => {
+                                const row = payload?.[0]?.payload as
+                                  (typeof chartData)[number] | undefined;
+                                return active && row ? (
+                                  <div className="chart-tooltip">
+                                    <strong>{row.fullTime}</strong>
+                                    <span>
+                                      {lang === "bn" ? "সম্ভাব্য" : "Projected"}{" "}
+                                      {chartKind === "cash" ? t.cash : t.emoney}
+                                      : ৳
+                                      {row[chartKind].toLocaleString("en-BD")}
+                                    </span>
+                                    <span>
+                                      {t.reserve}: ৳
+                                      {row[
+                                        `${chartKind}Reserve`
+                                      ].toLocaleString("en-BD")}
+                                    </span>
+                                    <span>
+                                      {t.forecastRequests}: {row.count}
+                                    </span>
+                                    <span>
+                                      Cash-in: ৳
+                                      {row.cashIn.toLocaleString("en-BD")} ·
+                                      Cash-out: ৳
+                                      {row.cashOut.toLocaleString("en-BD")}
+                                    </span>
+                                  </div>
+                                ) : null;
+                              }}
                             />
-                            <Legend />
                             <ReferenceLine
                               y={
                                 (chartKind === "cash"
@@ -755,14 +1125,10 @@ export default function App() {
                               }
                               stroke="#c05649"
                               strokeDasharray="5 4"
-                              label={{
-                                value: "Reserve",
-                                position: "insideTopRight",
-                                fontSize: 11,
-                              }}
                             />
                             <Line
                               type="monotone"
+                              isAnimationActive={false}
                               dataKey={chartKind}
                               name={chartKind === "cash" ? t.cash : t.emoney}
                               stroke="#2253A0"
@@ -772,19 +1138,108 @@ export default function App() {
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
+                      <div className="chart-legend">
+                        <span>
+                          <i className="legend-line" />
+                          {t.projectedBalance}
+                        </span>
+                        <span>
+                          <i className="legend-dash" />
+                          {t.reserve}
+                        </span>
+                      </div>
+                      <p className="sr-only">
+                        {chartKind === "cash" ? t.cash : t.emoney} starts at{" "}
+                        {taka(forecast.agent[chartKind])}; reserve is{" "}
+                        {taka(forecast.agent[`${chartKind}_reserve`])}.{" "}
+                        {forecast[`breach_${chartKind}`]
+                          ? `Earliest reserve breach at ${dateTime(forecast[`breach_${chartKind}`])}.`
+                          : "No reserve breach in the six-hour forecast."}
+                      </p>
                       <p className="chart-note">
-                        Six-hour illustrative range: ±
-                        {taka(forecast.buckets[5].range_half_width)}.{" "}
-                        {forecast.range_method}
+                        {forecast.method} ·{" "}
+                        {lang === "bn"
+                          ? `ঐতিহাসিক যাচাই ত্রুটি থেকে উদাহরণস্বরূপ ছয় ঘণ্টার সীমা ±${taka(forecast.buckets[5].range_half_width)}। এটি নিশ্চিততার সীমা বা ঘাটতির সম্ভাবনা নয়।`
+                          : `Illustrative six-hour error range ±${taka(forecast.buckets[5].range_half_width)}. This is based on historical validation error, not a confidence interval or shortage probability.`}
                       </p>
                     </div>
-                    <div className="card chart-card">
+                    <div
+                      className={
+                        "card risk-action " +
+                        (forecast.risk === "High" ? "risk-high" : "")
+                      }
+                    >
+                      <span className="eyebrow">{t.reserveWatch}</span>
+                      <div className="risk-head">
+                        <Badge risk={forecast.risk} lang={lang} />
+                        <Clock3 size={20} />
+                      </div>
+                      <h3>
+                        {forecast.earliest_breach
+                          ? lang === "bn"
+                            ? `${forecast.kind === "cash" ? t.cash : t.emoney} সংরক্ষণ কমতে পারে`
+                            : `${forecast.kind === "cash" ? t.cash : t.emoney} reserve may be breached`
+                          : t.allclear}
+                      </h3>
+                      <p className="risk-time">
+                        {forecast.earliest_breach
+                          ? dateTime(forecast.earliest_breach)
+                          : `${lang === "bn" ? "পরবর্তী পর্যালোচনা" : "Next review"}: ${time(forecast.buckets[5]?.time || null)}`}
+                      </p>
+                      {forecast.kind && (
+                        <p className="risk-amount">
+                          {lang === "bn" ? "প্রয়োজন" : "Required"}{" "}
+                          {taka(forecast.required[forecast.kind])}
+                        </p>
+                      )}
+                      <p>
+                        {lang === "en"
+                          ? forecast.explanation_en
+                          : forecast.explanation_bn}
+                      </p>
+                      <p className="chart-note">
+                        {lang === "bn"
+                          ? "সংরক্ষণ সীমা অতিক্রম একটি পরিচালন সতর্কতা; এর অর্থ প্রতিটি লেনদেন ব্যর্থ হবে না।"
+                          : "A reserve breach is an operating warning; it does not by itself mean a customer transaction fails."}
+                      </p>
+                      <div className="button-row">
+                        <button
+                          className="button primary"
+                          onClick={() => go("rebalance")}
+                        >
+                          {t.options}
+                          <ChevronRight size={16} />
+                        </button>
+                        {forecast.stale && (
+                          <button
+                            className="button secondary"
+                            onClick={() => go("confirm")}
+                          >
+                            {t.confirm}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="dashboard-secondary">
+                    <div className="card chart-card demand-panel">
                       <div className="card-title">
                         <div>
-                          <span className="eyebrow">NEXT 6 HOURS</span>
+                          <span className="eyebrow">{t.forecastHour}</span>
                           <h3>{t.demand}</h3>
+                          <p>
+                            {t.peak}: {peakBucket?.demand_count || 0}{" "}
+                            {lang === "bn" ? "অনুরোধ" : "requests at"}{" "}
+                            {time(peakBucket?.time || null)}
+                          </p>
                         </div>
-                        <span className="small-pill">{forecast.method}</span>
+                        <span className="small-pill">
+                          {forecast.buckets.reduce(
+                            (total, b) => total + b.demand_count,
+                            0,
+                          )}{" "}
+                          {lang === "bn" ? "অনুরোধ" : "requests"}
+                        </span>
                       </div>
                       <div className="chart">
                         <ResponsiveContainer width="100%" height="100%">
@@ -795,20 +1250,69 @@ export default function App() {
                             <CartesianGrid vertical={false} stroke="#e8edf3" />
                             <XAxis dataKey="time" tick={{ fontSize: 11 }} />
                             <YAxis tick={{ fontSize: 11 }} />
-                            <Tooltip />
+                            <Tooltip
+                              formatter={(value) =>
+                                `${value} requested transactions`
+                              }
+                              labelFormatter={(label) =>
+                                `Forecast hour ${label}`
+                              }
+                            />
                             <Bar
                               dataKey="count"
+                              isAnimationActive={false}
                               name="Requested transactions"
                               fill="#F1C93B"
                               radius={[4, 4, 0, 0]}
-                            />
+                            >
+                              <LabelList
+                                dataKey="count"
+                                position="top"
+                                fontSize={11}
+                                fill="#4d627b"
+                              />
+                            </Bar>
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                       <p className="chart-note">
-                        Forecast requested transaction count. Shortages can hide
-                        demand in completed-only data.
+                        Requested transactions per hour. Completed-only history
+                        can hide unmet demand.
                       </p>
+                    </div>
+                    <div className="card list-card compact-options">
+                      <div className="card-title">
+                        <div>
+                          <span className="eyebrow">{t.safeSources}</span>
+                          <h3>{t.options}</h3>
+                        </div>
+                        <ShieldCheck size={20} />
+                      </div>
+                      {safeCandidates.slice(0, 3).map((c) => (
+                        <div className="option-row" key={c.id}>
+                          <div>
+                            <strong>{c.name}</strong>
+                            <span>
+                              {c.area} · {c.distance_km} km · about{" "}
+                              {c.travel_minutes} min
+                            </span>
+                            <small>{c.reason}</small>
+                          </div>
+                          <b>{taka(c.safe_available)}</b>
+                        </div>
+                      ))}
+                      {!safeCandidates.length && (
+                        <Empty>
+                          No safe source is currently available. Confirm
+                          balances or review the distributor later.
+                        </Empty>
+                      )}
+                      <button
+                        className="text-link"
+                        onClick={() => go("rebalance")}
+                      >
+                        Compare all options <ChevronRight size={16} />
+                      </button>
                     </div>
                   </div>
                   <div className="card table-card">
@@ -843,39 +1347,40 @@ export default function App() {
                       </table>
                     </div>
                   </div>
-                  <div className="card action-panel">
-                    <div>
-                      <span className="eyebrow">{t.action}</span>
-                      <h3>
-                        {forecast.stale
-                          ? t.confirm
-                          : forecast.kind
-                            ? `Prepare ${taka(forecast.required[forecast.kind])} ${forecast.kind === "cash" ? t.cash : t.emoney}`
-                            : "Keep monitoring balances"}
-                      </h3>
-                      <p>
-                        {forecast.stale
-                          ? "Reconfirm counted balances before relying on recommendations."
-                          : rec?.candidates.find((c) => c.suitable)?.name
-                            ? `Safe option: ${rec.candidates.find((c) => c.suitable)?.name}. Compare all sources before requesting.`
-                            : "No safe nearby source identified; review distributor availability."}
-                      </p>
-                    </div>
-                    <div className="button-row">
+                  <div className="card list-card recent-panel">
+                    <div className="card-title">
+                      <div>
+                        <span className="eyebrow">
+                          {lang === "bn" ? "কার্যক্রমের ইতিহাস" : "AUDIT TRAIL"}
+                        </span>
+                        <h3>{t.recentActivity}</h3>
+                      </div>
                       <button
-                        className="button secondary"
-                        onClick={() => go("confirm")}
+                        className="text-link"
+                        onClick={() => go("activity")}
                       >
-                        {t.confirm}
-                      </button>
-                      <button
-                        className="button primary"
-                        onClick={() => go("rebalance")}
-                      >
-                        {t.options}
-                        <ChevronRight size={16} />
+                        View all <ChevronRight size={16} />
                       </button>
                     </div>
+                    {activity?.events.length ? (
+                      activity.events.slice(0, 3).map((e) => (
+                        <div className="list-row" key={e.id}>
+                          <span className="activity-icon">
+                            <Activity size={16} />
+                          </span>
+                          <div>
+                            <strong>{e.kind}</strong>
+                            <p>{eventText(e.kind, e.detail)}</p>
+                          </div>
+                          <time>{dateTime(e.at)}</time>
+                        </div>
+                      ))
+                    ) : (
+                      <Empty>
+                        No events recorded yet. Balance confirmations and
+                        requests will appear here.
+                      </Empty>
+                    )}
                   </div>
                 </>
               )}
@@ -885,9 +1390,48 @@ export default function App() {
                     title="Active alerts"
                     subtitle="Operational rules use breach timing and projected negative balances, not probabilities."
                   />
+                  <div className="filter-chips" aria-label="Alert filters">
+                    {(["all", "cash", "emoney"] as const).map((k) => (
+                      <button
+                        key={k}
+                        className={alertFilter === k ? "selected" : ""}
+                        aria-pressed={alertFilter === k}
+                        onClick={() => setAlertFilter(k)}
+                      >
+                        {k === "all"
+                          ? "All alerts"
+                          : k === "cash"
+                            ? t.cash
+                            : t.emoney}
+                      </button>
+                    ))}
+                    <select
+                      aria-label="Filter alerts by risk"
+                      value={alertRiskFilter}
+                      onChange={(e) => setAlertRiskFilter(e.target.value)}
+                    >
+                      {[
+                        "All risks",
+                        "High",
+                        "Medium",
+                        "Low",
+                        "Needs confirmation",
+                      ].map((risk) => (
+                        <option key={risk} value={risk}>
+                          {riskLabel(risk, lang)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="card-grid">
                     {(["cash", "emoney"] as const)
-                      .filter((k) => forecast[`breach_${k}`])
+                      .filter(
+                        (k) =>
+                          forecast[`breach_${k}`] &&
+                          (alertFilter === "all" || alertFilter === k) &&
+                          (alertRiskFilter === "All risks" ||
+                            forecast.risk === alertRiskFilter),
+                      )
                       .map((k) => (
                         <div className="card alert-card" key={k}>
                           <div className="card-title">
@@ -917,8 +1461,25 @@ export default function App() {
                           </button>
                         </div>
                       ))}
-                    {!forecast.breach_cash && !forecast.breach_emoney && (
-                      <Empty>{t.allclear}</Empty>
+                    {!(["cash", "emoney"] as const).some(
+                      (k) =>
+                        forecast[`breach_${k}`] &&
+                        (alertFilter === "all" || alertFilter === k) &&
+                        (alertRiskFilter === "All risks" ||
+                          forecast.risk === alertRiskFilter),
+                    ) && (
+                      <Empty>
+                        No active reserve alerts match these filters.{" "}
+                        <button
+                          className="text-link"
+                          onClick={() => {
+                            setAlertFilter("all");
+                            setAlertRiskFilter("All risks");
+                          }}
+                        >
+                          Show all
+                        </button>
+                      </Empty>
                     )}
                   </div>
                   {forecast.stale && (
@@ -988,101 +1549,201 @@ export default function App() {
                     </div>
                     <ShieldCheck size={32} />
                   </div>
-                  <div className="candidate-grid">
-                    {candidateList.map((c) => (
-                      <div
-                        className={
-                          "card candidate " +
-                          (c.suitable ? "candidate-safe" : "candidate-excluded")
-                        }
-                        key={c.id}
-                      >
-                        <div className="card-title">
-                          <div>
-                            <h3>{c.name}</h3>
-                            <p>
-                              {c.area} · {c.id}
-                              {c.distributor ? " · Distributor" : ""}
-                            </p>
-                          </div>
-                          <span
-                            className={
-                              "status " + (c.suitable ? "good" : "bad")
-                            }
-                          >
-                            {c.suitable ? "Suitable" : "Excluded"}
-                          </span>
-                        </div>
-                        <div className="candidate-facts">
-                          <span>
-                            <strong>{c.distance_km} km</strong> away
-                          </span>
-                          <span>
-                            <strong>{c.travel_minutes} min</strong> estimated
-                          </span>
-                          <span>
-                            <strong>{taka(c.safe_available)}</strong> safe
-                            capacity
-                          </span>
-                        </div>
-                        <p className="reason">{c.reason}</p>
-                        {c.suitable && (
-                          <button
-                            className="button primary"
-                            disabled={busy}
-                            onClick={() => {
-                              const val = Number(amount);
-                              if (
-                                !Number.isFinite(val) ||
-                                val <= 0 ||
-                                Math.round(val * 100) > c.safe_available
-                              ) {
-                                setError(
-                                  `Enter an amount from ৳1 to ${taka(c.safe_available)}.`,
-                                );
-                                return;
-                              }
-                              mutate(
-                                () =>
-                                  post("/requests", {
-                                    recipient_id: aid,
-                                    donor_id: c.id,
-                                    kind: rec.kind,
-                                    amount: Math.round(val * 100),
-                                  }),
-                                `Request sent to ${c.name}.`,
-                              );
-                            }}
-                          >
-                            {t.request}
-                            <ChevronRight size={16} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="card form-card">
-                    <label>
-                      Exchange amount (৳)
-                      <input
-                        type="number"
-                        min="1"
-                        step="0.01"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                  <div className="rebalance-layout">
+                    <div>
+                      <SectionHead
+                        title={t.suitableSources}
+                        subtitle={`${safeCandidates.length} candidates preserve both participants’ projected reserves.`}
                       />
-                    </label>
-                    <p>{rec.travel_method}</p>
-                    {rec.required > 0 &&
-                      rec.candidates.some(
-                        (c) => c.suitable && c.safe_available < rec.required,
-                      ) && (
+                      <div className="candidate-grid">
+                        {safeCandidates.map((c) => (
+                          <div
+                            className={`card candidate candidate-safe ${selectedCandidate?.id === c.id ? "chosen" : ""}`}
+                            key={c.id}
+                          >
+                            <div className="card-title">
+                              <div>
+                                <h3>{c.name}</h3>
+                                <p>
+                                  {c.area} · {c.id}
+                                  {c.distributor ? " · Distributor" : ""}
+                                </p>
+                              </div>
+                              <span className="status good">Suitable</span>
+                            </div>
+                            <div className="candidate-facts">
+                              <span>
+                                <strong>{c.distance_km} km</strong> away
+                              </span>
+                              <span>
+                                <strong>{c.travel_minutes} min</strong> estimate
+                              </span>
+                              <span>
+                                <strong>{taka(c.safe_available)}</strong> safe
+                                capacity
+                              </span>
+                            </div>
+                            <p className="reason">{c.reason}</p>
+                            <button
+                              type="button"
+                              className="select-candidate"
+                              aria-pressed={selectedCandidate?.id === c.id}
+                              onClick={() => setSelectedCandidateId(c.id)}
+                            >
+                              {selectedCandidate?.id === c.id
+                                ? "Selected source"
+                                : "Select source"}
+                              <ChevronRight size={15} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      {!safeCandidates.length && (
+                        <Empty>
+                          No suitable source right now. Confirm stale balances
+                          or review the modeled distributor later.
+                        </Empty>
+                      )}
+                      <details className="excluded-section">
+                        <summary>
+                          Why {excludedCandidates.length} other sources are
+                          excluded
+                        </summary>
+                        <div className="candidate-grid">
+                          {excludedCandidates.map((c) => (
+                            <div
+                              className="card candidate candidate-excluded"
+                              key={c.id}
+                            >
+                              <div className="card-title">
+                                <div>
+                                  <h3>{c.name}</h3>
+                                  <p>
+                                    {c.area} · {c.id}
+                                  </p>
+                                </div>
+                                <span className="status bad">Excluded</span>
+                              </div>
+                              <div className="candidate-facts">
+                                <span>{c.distance_km} km</span>
+                                <span>{c.travel_minutes} min estimated</span>
+                                <span>
+                                  {taka(c.safe_available)} safe capacity
+                                </span>
+                              </div>
+                              <p className="reason">{c.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                    <div className="card form-card request-panel">
+                      <span className="eyebrow">{t.requestSummary}</span>
+                      <h3>
+                        {selectedCandidate
+                          ? selectedCandidate.name
+                          : "Select a suitable source"}
+                      </h3>
+                      {selectedCandidate && (
                         <p>
-                          Partial assistance is available. Request the safe
-                          amount, then use the distributor for the remaining
-                          gap.
+                          {selectedCandidate.area} ·{" "}
+                          {selectedCandidate.distance_km} km · estimated arrival{" "}
+                          {dateTime(selectedCandidate.eta)}
                         </p>
                       )}
+                      <div className="request-facts">
+                        <span>
+                          Projected need <strong>{taka(rec.required)}</strong>
+                        </span>
+                        <span>
+                          Remaining gap <strong>{taka(outstanding)}</strong>
+                        </span>
+                        <span>
+                          Safe capacity{" "}
+                          <strong>
+                            {taka(selectedCandidate?.safe_available || 0)}
+                          </strong>
+                        </span>
+                      </div>
+                      <label>
+                        Exchange amount (৳)
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          max={(requestLimit / 100).toFixed(2)}
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                        />
+                      </label>
+                      {selectedCandidate &&
+                        Number(amount) * 100 > requestLimit && (
+                          <p className="inline-error" role="alert">
+                            Request at most {taka(requestLimit)} to stay within
+                            this source’s safe capacity and the remaining gap.
+                            Reduce the amount or choose another source.
+                          </p>
+                        )}
+                      {outstanding === 0 && (
+                        <p className="notice success">
+                          Existing open requests cover the projected need.
+                        </p>
+                      )}
+                      <p>
+                        {rec.kind === "cash"
+                          ? "Receiving cash gives the same amount of e-money to the source."
+                          : "Receiving e-money gives the same amount of cash to the source."}{" "}
+                        No live transfer occurs.
+                      </p>
+                      <p>
+                        Requested {taka(Math.round(Number(amount || 0) * 100))}{" "}
+                        · gap after request{" "}
+                        {taka(
+                          Math.max(
+                            0,
+                            outstanding - Math.round(Number(amount || 0) * 100),
+                          ),
+                        )}
+                      </p>
+                      <button
+                        className="button primary"
+                        disabled={
+                          busy ||
+                          !selectedCandidate ||
+                          !amount ||
+                          Number(amount) <= 0 ||
+                          Math.round(Number(amount) * 100) > requestLimit
+                        }
+                        onClick={() => {
+                          if (!selectedCandidate) return;
+                          const val = Number(amount);
+                          if (
+                            !Number.isFinite(val) ||
+                            val <= 0 ||
+                            Math.round(val * 100) > requestLimit
+                          ) {
+                            setError(
+                              `Enter an amount up to ${taka(requestLimit)}.`,
+                            );
+                            return;
+                          }
+                          mutate(
+                            () =>
+                              post("/requests", {
+                                recipient_id: aid,
+                                donor_id: selectedCandidate.id,
+                                kind: rec.kind,
+                                amount: Math.round(val * 100),
+                              }),
+                            `Request sent to ${selectedCandidate.name}. Awaiting supervisor acceptance.`,
+                          );
+                        }}
+                      >
+                        {busy ? "Sending…" : t.request}
+                        <ChevronRight size={16} />
+                      </button>
+                      <p className="chart-note">{rec.travel_method}</p>
+                    </div>
                   </div>
                   <SectionHead title="Existing requests" />
                   <RequestList
@@ -1123,6 +1784,11 @@ export default function App() {
                         min="0"
                         step="1"
                         value={cashInput}
+                        aria-invalid={
+                          cashInput !== "" &&
+                          (!Number.isInteger(Number(cashInput)) ||
+                            Number(cashInput) < 0)
+                        }
                         onChange={(e) => setCashInput(e.target.value)}
                       />
                     </label>
@@ -1133,6 +1799,11 @@ export default function App() {
                         min="0"
                         step="1"
                         value={emoneyInput}
+                        aria-invalid={
+                          emoneyInput !== "" &&
+                          (!Number.isInteger(Number(emoneyInput)) ||
+                            Number(emoneyInput) < 0)
+                        }
                         onChange={(e) => setEmoneyInput(e.target.value)}
                       />
                     </label>
@@ -1154,6 +1825,10 @@ export default function App() {
                         {taka(Math.round(Number(emoneyInput || 0) * 100))}
                       </strong>
                     </div>
+                    <p className="chart-note">
+                      Values are whole taka. The saved ledger records paisa and
+                      updates the forecast after confirmation.
+                    </p>
                     <button
                       className="button primary"
                       disabled={busy}
@@ -1255,22 +1930,91 @@ export default function App() {
                 <>
                   <div className="metric-grid">
                     {[
-                      ["Open agents", summary.open],
-                      ["High risk", summary.high_risk],
-                      ["Cash breaches", summary.cash_breaches],
-                      ["E-money breaches", summary.emoney_breaches],
-                      [
-                        "Pending / accepted",
-                        `${summary.pending} / ${summary.accepted}`,
-                      ],
-                      ["Stale balances", summary.stale],
-                      ["Forecast demand", summary.demand_count],
+                      [t.openAgents, summary.open],
+                      [t.highRisk, summary.high_risk],
+                      [t.cashBreaches, summary.cash_breaches],
+                      [t.emoneyBreaches, summary.emoney_breaches],
+                      [t.pendingRequests, summary.pending],
+                      [t.staleBalances, summary.stale],
                     ].map(([label, value]) => (
                       <div className="card metric" key={label}>
                         <span>{label}</span>
                         <strong>{value}</strong>
                       </div>
                     ))}
+                  </div>
+                  <div className="supervisor-insights">
+                    <div className="card risk-overview">
+                      <div className="card-title">
+                        <div>
+                          <span className="eyebrow">{t.riskOverview}</span>
+                          <h3>{t.filterByRisk}</h3>
+                        </div>
+                        <button
+                          className="text-link"
+                          onClick={() => setRiskFilter("All risks")}
+                        >
+                          {lang === "bn" ? "ফিল্টার মুছুন" : "Reset filters"}
+                        </button>
+                      </div>
+                      <div className="risk-filters">
+                        {[
+                          "All risks",
+                          "High",
+                          "Medium",
+                          "Low",
+                          "Needs confirmation",
+                        ].map((risk) => (
+                          <button
+                            key={risk}
+                            className={riskFilter === risk ? "selected" : ""}
+                            aria-pressed={riskFilter === risk}
+                            onClick={() => setRiskFilter(risk)}
+                          >
+                            <span>{riskLabel(risk, lang)}</span>
+                            <strong>
+                              {risk === "All risks"
+                                ? summary.agents.length
+                                : summary.agents.filter((f) => f.risk === risk)
+                                    .length}
+                            </strong>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="card pending-panel">
+                      <span className="eyebrow">{t.pendingRequests}</span>
+                      <h3>
+                        {summary.pending}{" "}
+                        {lang === "bn"
+                          ? "পর্যালোচনার অপেক্ষায়"
+                          : "awaiting review"}
+                      </h3>
+                      {requests
+                        .filter((r) => r.status === "Pending")
+                        .slice(0, 3)
+                        .map((r) => (
+                          <div className="pending-row" key={r.id}>
+                            <span>
+                              #{r.id} · {r.recipient_id} ← {r.donor_id}
+                            </span>
+                            <strong>{taka(r.amount)}</strong>
+                          </div>
+                        ))}
+                      {!summary.pending && (
+                        <p>
+                          {lang === "bn"
+                            ? `গ্রহণের অপেক্ষায় কোনো অনুরোধ নেই। ${summary.accepted}টি গৃহীত অনুরোধ কার্যক্রমে আছে।`
+                            : `No requests need acceptance. ${summary.accepted} accepted requests remain in Operations.`}
+                        </p>
+                      )}
+                      <button
+                        className="text-link"
+                        onClick={() => go("operations")}
+                      >
+                        {t.operations} <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                   <div className="card table-card">
                     <div className="card-title">
@@ -1295,7 +2039,11 @@ export default function App() {
                         onChange={(e) => setAreaFilter(e.target.value)}
                       >
                         {areas.map((a) => (
-                          <option key={a}>{a}</option>
+                          <option key={a} value={a}>
+                            {a === "All areas" && lang === "bn"
+                              ? "সব এলাকা"
+                              : a}
+                          </option>
                         ))}
                       </select>
                       <select
@@ -1310,8 +2058,31 @@ export default function App() {
                           "Low",
                           "Needs confirmation",
                         ].map((r) => (
-                          <option key={r}>{r}</option>
+                          <option key={r} value={r}>
+                            {riskLabel(r, lang)}
+                          </option>
                         ))}
+                      </select>
+                      <select
+                        aria-label="Sort agents"
+                        value={sortBy}
+                        onChange={(e) =>
+                          setSortBy(e.target.value as typeof sortBy)
+                        }
+                      >
+                        <option value="risk">
+                          {lang === "bn" ? "বাছাই: ঝুঁকি" : "Sort: risk"}
+                        </option>
+                        <option value="breach">
+                          {lang === "bn"
+                            ? "বাছাই: প্রথম ঘাটতি"
+                            : "Sort: earliest breach"}
+                        </option>
+                        <option value="required">
+                          {lang === "bn"
+                            ? "বাছাই: প্রয়োজনীয় পরিমাণ"
+                            : "Sort: required amount"}
+                        </option>
                       </select>
                     </div>
                     <div className="table-wrap">
@@ -1320,6 +2091,8 @@ export default function App() {
                           <tr>
                             <th>Agent</th>
                             <th>Area</th>
+                            <th>Cash</th>
+                            <th>E-money</th>
                             <th>Risk</th>
                             <th>Breach</th>
                             <th>Required</th>
@@ -1328,55 +2101,56 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {[...filtered]
-                            .sort(
-                              (a, b) =>
-                                (({
-                                  High: 0,
-                                  "Needs confirmation": 1,
-                                  Medium: 2,
-                                  Low: 3,
-                                })[a.risk] ?? 4) -
-                                ({
-                                  High: 0,
-                                  "Needs confirmation": 1,
-                                  Medium: 2,
-                                  Low: 3,
-                                }[b.risk] ?? 4),
-                            )
-                            .map((f) => (
-                              <tr key={f.agent.id}>
-                                <td>
-                                  <strong>{f.agent.name}</strong>
-                                  <small>{f.agent.id}</small>
-                                </td>
-                                <td>{f.agent.area}</td>
-                                <td>
-                                  <Badge risk={f.risk} lang={lang} />
-                                </td>
-                                <td>{dateTime(f.earliest_breach)}</td>
-                                <td>
-                                  {f.kind ? taka(f.required[f.kind]) : "—"}
-                                </td>
-                                <td>
-                                  {f.stale
-                                    ? "Stale"
-                                    : dateTime(f.agent.confirmed_at)}
-                                </td>
-                                <td>
-                                  <button
-                                    className="text-link"
-                                    onClick={() => chooseAgent(f.agent.id)}
-                                  >
-                                    View <ChevronRight size={15} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
+                          {sortedAgents.map((f) => (
+                            <tr key={f.agent.id}>
+                              <td>
+                                <strong>{f.agent.name}</strong>
+                                <small>{f.agent.id}</small>
+                              </td>
+                              <td>{f.agent.area}</td>
+                              <td className="number-cell">
+                                {taka(f.agent.cash)}
+                              </td>
+                              <td className="number-cell">
+                                {taka(f.agent.emoney)}
+                              </td>
+                              <td>
+                                <Badge risk={f.risk} lang={lang} />
+                              </td>
+                              <td>{dateTime(f.earliest_breach)}</td>
+                              <td>{f.kind ? taka(f.required[f.kind]) : "—"}</td>
+                              <td>
+                                {f.stale
+                                  ? "Stale"
+                                  : dateTime(f.agent.confirmed_at)}
+                              </td>
+                              <td>
+                                <button
+                                  className="text-link"
+                                  aria-label={`View details for ${f.agent.name}`}
+                                  onClick={() => chooseAgent(f.agent.id)}
+                                >
+                                  View <ChevronRight size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                       {!filtered.length && (
-                        <Empty>No agents match these filters.</Empty>
+                        <Empty>
+                          No agents match these filters.{" "}
+                          <button
+                            className="text-link"
+                            onClick={() => {
+                              setAreaFilter("All areas");
+                              setRiskFilter("All risks");
+                              setSearch("");
+                            }}
+                          >
+                            Clear filters
+                          </button>
+                        </Empty>
                       )}
                     </div>
                   </div>
@@ -1391,6 +2165,7 @@ export default function App() {
                       value={forecast.agent.cash}
                       reserve={forecast.agent.cash_reserve}
                       tone="blue"
+                      reserveLabel={t.reserve}
                     />
                     <BalanceCard
                       icon={ArrowLeftRight}
@@ -1398,6 +2173,7 @@ export default function App() {
                       value={forecast.agent.emoney}
                       reserve={forecast.agent.emoney_reserve}
                       tone="yellow"
+                      reserveLabel={t.reserve}
                     />
                     <div className="card detail-status">
                       <span className="eyebrow">RISK ASSESSMENT</span>
@@ -1433,11 +2209,13 @@ export default function App() {
                             <Legend />
                             <Line
                               dataKey="cash"
+                              isAnimationActive={false}
                               stroke="#2253A0"
                               strokeWidth={2}
                             />
                             <Line
                               dataKey="emoney"
+                              isAnimationActive={false}
                               stroke="#e0b52f"
                               strokeWidth={2}
                             />
@@ -1466,11 +2244,13 @@ export default function App() {
                             <Legend />
                             <Bar
                               dataKey="cashIn"
+                              isAnimationActive={false}
                               name="Cash-in ৳"
                               fill="#2253A0"
                             />
                             <Bar
                               dataKey="cashOut"
+                              isAnimationActive={false}
                               name="Cash-out ৳"
                               fill="#F1C93B"
                             />
@@ -1549,18 +2329,23 @@ export default function App() {
                           {Object.entries(metrics.targets).map(([key, m]) => (
                             <tr key={key}>
                               <td>
-                                <strong>{key.replace("_", " ")}</strong>
+                                <strong>{key.replaceAll("_", " ")}</strong>
+                                <small>
+                                  {key === "demand_count"
+                                    ? "Requested transactions per hour"
+                                    : "Paisa converted to taka"}
+                                </small>
                               </td>
                               <td>
                                 {key === "demand_count"
-                                  ? m.baseline_mae.toFixed(1)
+                                  ? `${m.baseline_mae.toFixed(1)} requests`
                                   : taka(m.baseline_mae)}
                               </td>
                               <td>
                                 {m.model_mae === null
                                   ? "Unavailable"
                                   : key === "demand_count"
-                                    ? m.model_mae.toFixed(1)
+                                    ? `${m.model_mae.toFixed(1)} requests`
                                     : taka(m.model_mae)}
                               </td>
                               <td>
@@ -1616,6 +2401,11 @@ export default function App() {
                     <a className="button secondary" href="/api/import/sample">
                       <Download size={16} /> Download sample CSV
                     </a>
+                    <p>
+                      Amounts use integer paisa (৳1 = 100 paisa). Timestamps
+                      need a timezone offset, for example <code>+06:00</code>.
+                      Maximum file size: 3 MB.
+                    </p>
                     <label>
                       Choose CSV file
                       <input
@@ -1630,9 +2420,10 @@ export default function App() {
                     <div className="button-row">
                       <button
                         className="button secondary"
-                        disabled={!csvFile || busy}
+                        disabled={!csvFile || busy || previewBusy}
                         onClick={async () => {
                           if (!csvFile) return;
+                          setPreviewBusy(true);
                           const fd = new FormData();
                           fd.append("file", csvFile);
                           try {
@@ -1645,10 +2436,12 @@ export default function App() {
                             );
                           } catch (e) {
                             setError((e as Error).message);
+                          } finally {
+                            setPreviewBusy(false);
                           }
                         }}
                       >
-                        Preview import
+                        {previewBusy ? "Checking rows…" : "Preview import"}
                       </button>
                       <button
                         className="button primary"
@@ -1656,7 +2449,8 @@ export default function App() {
                           !csvFile ||
                           !csvPreview ||
                           csvPreview.errors.length > 0 ||
-                          busy
+                          busy ||
+                          previewBusy
                         }
                         onClick={() => {
                           if (!csvFile) return;
@@ -1673,7 +2467,7 @@ export default function App() {
                           setCsvPreview(null);
                         }}
                       >
-                        Commit import
+                        {busy ? "Importing…" : "Commit import"}
                       </button>
                     </div>
                     {csvPreview && (
@@ -1705,61 +2499,66 @@ export default function App() {
                     subtitle="Follow one fixed scenario from warning through a simulated exchange and measured service outcome."
                   />
                   <div className="demo-grid">
-                    <ol className="card steps">
-                      <li>
-                        <button
-                          onClick={() => {
-                            setAid("A01");
-                            changeRole("agent");
-                          }}
-                        >
-                          Open the at-risk Lake View Store agent
-                        </button>
-                      </li>
-                      <li>
-                        <button onClick={() => go("dashboard")}>
-                          Inspect the cash forecast and reserve breach
-                        </button>
-                      </li>
-                      <li>
-                        <button onClick={() => go("rebalance")}>
-                          Compare a suitable donor with excluded nearby agents
-                        </button>
-                      </li>
-                      <li>
-                        <button onClick={() => go("rebalance")}>
-                          Create a request for the suggested amount
-                        </button>
-                      </li>
-                      <li>
-                        <button onClick={() => changeRole("supervisor")}>
-                          Switch to supervisor and accept the request
-                        </button>
-                      </li>
-                      <li>
-                        <button onClick={() => go("operations")}>
-                          Complete the simulated exchange
-                        </button>
-                      </li>
-                      <li>
-                        <button onClick={() => go("details")}>
-                          Review updated balances and risk
-                        </button>
-                      </li>
-                      <li>
-                        <button onClick={() => go("demo")}>
-                          Compare service outcomes below
-                        </button>
-                      </li>
-                    </ol>
+                    <div className="card demo-steps">
+                      <div className="card-title">
+                        <div>
+                          <span className="eyebrow">GUIDED SEQUENCE</span>
+                          <h3>
+                            {currentDemoStep < 0
+                              ? "Walkthrough complete"
+                              : `Step ${currentDemoStep + 1} of ${demoSteps.length}`}
+                          </h3>
+                        </div>
+                        <span className="small-pill">
+                          {demoSteps.filter((step) => step.done).length}/
+                          {demoSteps.length} done
+                        </span>
+                      </div>
+                      <ol className="steps">
+                        {demoSteps.map((step, index) => (
+                          <li
+                            key={step.label}
+                            className={
+                              step.done
+                                ? "done"
+                                : index === currentDemoStep
+                                  ? "current"
+                                  : ""
+                            }
+                          >
+                            <span className="step-marker">
+                              {step.done ? (
+                                <CheckCircle2 size={17} />
+                              ) : (
+                                index + 1
+                              )}
+                            </span>
+                            <button onClick={step.action}>
+                              <strong>{step.label}</strong>
+                              <small>
+                                {step.done
+                                  ? "Completed"
+                                  : index === currentDemoStep
+                                    ? "Next action"
+                                    : "Open screen"}
+                              </small>
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
                     <div className="card outcome">
                       <div className="card-title">
                         <div>
                           <span className="eyebrow">SAME SEEDED DEMAND</span>
                           <h3>Service outcome simulation</h3>
                         </div>
-                        <button className="text-link" onClick={refreshReplay}>
-                          Recalculate
+                        <button
+                          className="text-link"
+                          onClick={refreshReplay}
+                          disabled={replayBusy}
+                        >
+                          {replayBusy ? "Calculating…" : "Recalculate"}
                         </button>
                       </div>
                       {replay ? (
@@ -1804,7 +2603,11 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  <button className="button danger" onClick={reset}>
+                  <button
+                    className="button danger"
+                    onClick={reset}
+                    disabled={busy}
+                  >
                     {t.reset}
                   </button>
                 </>
@@ -1827,6 +2630,7 @@ export default function App() {
             <button
               key={p}
               className={page === p ? "active" : ""}
+              aria-current={page === p ? "page" : undefined}
               onClick={() => go(p)}
             >
               <Icon size={19} />
@@ -1834,6 +2638,14 @@ export default function App() {
             </button>
           );
         })}
+        <button
+          className="more-nav"
+          onClick={() => setMenu(true)}
+          aria-label="More destinations and settings"
+        >
+          <MoreHorizontal size={20} />
+          <span>{t.more}</span>
+        </button>
       </nav>
     </div>
   );
@@ -1845,12 +2657,14 @@ function BalanceCard({
   value,
   reserve,
   tone,
+  reserveLabel,
 }: {
   icon: typeof Wallet;
   title: string;
   value: number;
   reserve: number;
   tone: string;
+  reserveLabel: string;
 }) {
   return (
     <div className={"card balance-card " + tone}>
@@ -1862,9 +2676,33 @@ function BalanceCard({
       </div>
       <strong>{taka(value)}</strong>
       <div className="reserve-line">
-        <span>Safe reserve</span>
+        <span>{reserveLabel}</span>
         <b>{taka(reserve)}</b>
       </div>
+    </div>
+  );
+}
+function InfoCard({
+  icon: Icon,
+  title,
+  value,
+  detail,
+}: {
+  icon: typeof Wallet;
+  title: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="card balance-card info-card">
+      <div className="balance-title">
+        <span className="icon-box">
+          <Icon size={20} />
+        </span>
+        <span>{title}</span>
+      </div>
+      <strong>{value}</strong>
+      <p>{detail}</p>
     </div>
   );
 }
@@ -1951,6 +2789,16 @@ function RequestList({
 }) {
   return (
     <div className="card table-card">
+      <div className="request-lifecycle" aria-label="Request lifecycle">
+        <span>1 · Pending</span>
+        <ChevronRight size={15} />
+        <span>2 · Accepted</span>
+        <ChevronRight size={15} />
+        <span>3 · Completed</span>
+        <small>
+          Rejected and cancelled requests close without an exchange.
+        </small>
+      </div>
       <div className="table-wrap">
         <table>
           <thead>
@@ -2047,6 +2895,11 @@ function RequestList({
           </Empty>
         )}
       </div>
+      {items
+        .filter((r) => r.status === "Completed")
+        .map((r) => (
+          <CompletionDetails key={r.id} request={r} />
+        ))}
     </div>
   );
 }
