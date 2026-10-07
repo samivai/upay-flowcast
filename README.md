@@ -2,7 +2,7 @@
 
 **Team:** [TEAM NAME — TO FILL]  
 **Members / registration IDs:** [CONFIRM WITH TEAM]  
-**Public GitHub repository:** **Not published yet** — a dedicated destination is required.  
+**Public GitHub repository:** [samivai/upay-flowcast](https://github.com/samivai/upay-flowcast) — published and verified; its current history begins with the workspace snapshot below.  
 **Live deployment:** **Not deployed yet** — a verified public HTTPS URL is required.  
 **Demo video:** **Not recorded yet** — [script](submission/VIDEO_SCRIPT.md) and [storyboard](submission/VIDEO_STORYBOARD.md) are prepared.  
 **Project report:** [Editable draft](submission/PROJECT_REPORT.md); export format: **Confirm with organizers**.
@@ -118,4 +118,4 @@ The scenario begins at **7 October 2026, 11:00 AM Asia/Dhaka**. The seed contain
 
 Cash-in adds physical cash and removes e-money; cash-out reverses that. A cash exchange of X adds X cash and removes X e-money from the recipient, with the exact opposite entries for the donor. A reserve breach is an operating warning, not automatically a failed transaction. The [architecture](docs/ARCHITECTURE.md) explains persistence and routing; [external resources](docs/EXTERNAL_RESOURCES.md) records provenance. No clean logo image was present in the supplied attachment; the interface uses a text wordmark with the requested blue `#2253A0` and yellow `#F8D749`.
 
-For a submission, replace the team placeholders, verify real chronology and eligibility, publish the public repository and HTTPS deployment, record the actual video, export the report in the organizer-required format, and submit through the official channel by the announced deadline. Do not treat the [local ZIP package](scripts/package_submission.py) as a substitute for GitHub history.
+For a submission, replace the team placeholders, verify real chronology and eligibility, publish a verified HTTPS deployment, record the actual video, export the report in the organizer-required format, and submit through the official channel by the announced deadline. Do not treat the [local ZIP package](scripts/package_submission.py) as a substitute for GitHub history.

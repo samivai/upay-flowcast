@@ -3,7 +3,7 @@
 **Team name:** [TO FILL]  
 **Members and registration IDs:** [TO FILL]  
 **Competition:** AI DEV FEST 2026 AI Hackathon — confirm eligibility and submission details with organizers.  
-**Public repository:** Not published yet.  
+**Public repository:** [samivai/upay-flowcast](https://github.com/samivai/upay-flowcast), verified public.  
 **Live application:** Not deployed yet.  
 **Demo video:** Not recorded yet.  
 **Required export format:** Confirm with organizers. This Markdown file is the editable source, not a claimed submitted report.
@@ -62,7 +62,7 @@ Real upay integration would require provider-authorized APIs and data access, co
 
 See [`docs/EXTERNAL_RESOURCES.md`](../docs/EXTERNAL_RESOURCES.md) for package, model, synthetic-data, brand, and AI-assistance disclosures. This project existed before the present submission-preparation request and lacked Git history in this workspace. The team must verify its origin and timing against the official development window and disclose prior components honestly. Current local commits do not establish earlier continuous development.
 
-**Repository link:** [ADD VERIFIED PUBLIC URL]  
+**Repository link:** https://github.com/samivai/upay-flowcast  
 **Deployment link:** [ADD VERIFIED PUBLIC HTTPS URL]  
 **Video link:** [ADD RECORDED VIDEO URL]  
 **Team details and organizer-required report/video formats:** [CONFIRM WITH TEAM AND ORGANIZERS]

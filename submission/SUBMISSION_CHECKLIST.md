@@ -9,7 +9,7 @@ This is an operational checklist, not a claim of eligibility. The [official hack
 - [x] Project report draft, video script, storyboard, architecture, AI approach, resource disclosure, compliance map, and on-site update template prepared.
 - [x] Deterministic packaging script prepared and checked for excluded local files.
 - [ ] Confirm team name, members, registration IDs, challenge/theme, development start time, and eligibility of this pre-existing project.
-- [ ] Select a **dedicated** public GitHub repository, authenticate, push actual commits, and verify access while signed out. Do not overwrite an unrelated repository.
+- [x] Dedicated [public GitHub repository](https://github.com/samivai/upay-flowcast) created; actual local commits pushed to `main` and file visibility verified. Earlier continuous history remains unverified.
 - [ ] Provide a persistent hosting destination, deploy the current source, test the public HTTPS URL and persistence, then add that verified URL to README/report.
 - [ ] Record and upload an actual demo video showing the app, AI evaluation, and practical impact; add its verified URL.
 - [ ] Export the report to the organizer-required format, add real team/repository/deployment/video details, and review all claims.
